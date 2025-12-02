@@ -36,8 +36,10 @@ from .tools.execute import ExecutionTool
 from .tools.verify import VerificationTool
 from .tools.capture import CaptureTool
 from .tools.learn import LearningsTool
+from .tools.memory import MemoryTools
 from .persistence.fixtures import FixtureStore
 from .persistence.learnings import LearningsStore
+from .memory.manager import MemoryManager
 
 # Configure logging
 logging.basicConfig(
@@ -50,6 +52,7 @@ logger = logging.getLogger('crucible')
 BASE_DIR = Path(__file__).parent.parent
 FIXTURES_DIR = BASE_DIR / 'fixtures'
 LEARNINGS_DIR = BASE_DIR / 'learnings'
+DATA_DIR = BASE_DIR / 'data'  # For memory system
 
 
 class CrucibleServer:
@@ -61,16 +64,19 @@ class CrucibleServer:
     - Verification (syntax, imports, types, lint, security)
     - Fixture capture and management
     - Persistent learnings across sessions
+    - Memory system (session, episodic, semantic, working)
     """
 
     def __init__(self):
         self.fixture_store = FixtureStore(FIXTURES_DIR)
         self.learnings_store = LearningsStore(LEARNINGS_DIR)
+        self.memory_manager = MemoryManager(DATA_DIR)
 
         self.execution_tool = ExecutionTool()
         self.verification_tool = VerificationTool()
         self.capture_tool = CaptureTool(self.fixture_store)
         self.learnings_tool = LearningsTool(self.learnings_store)
+        self.memory_tools = MemoryTools(self.memory_manager)
 
         if HAS_MCP:
             self.server = Server("crucible")
@@ -252,6 +258,255 @@ class CrucibleServer:
                         }
                     }
                 ),
+                # Memory System Tools
+                Tool(
+                    name="crucible_session_start",
+                    description="Start a new memory session. Call this at the beginning of work to enable context tracking.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project": {
+                                "type": "string",
+                                "description": "Project name (ember, cinder, intuitive-os, etc.)"
+                            },
+                            "project_path": {
+                                "type": "string",
+                                "description": "Path to project directory"
+                            },
+                            "goal": {
+                                "type": "string",
+                                "description": "Primary goal for this session"
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_session_resume",
+                    description="Resume a previous session to restore context.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "ID of session to resume"
+                            }
+                        },
+                        "required": ["session_id"]
+                    }
+                ),
+                Tool(
+                    name="crucible_session_end",
+                    description="End current session and save to long-term memory.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "quality_score": {
+                                "type": "number",
+                                "description": "Self-assessment of session quality (0-1)"
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_session_status",
+                    description="Get current session status and context.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_remember",
+                    description="Store something in memory (file read, decision, problem, insight, error).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "what": {
+                                "type": "string",
+                                "description": "What to remember"
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["file", "decision", "problem", "insight", "error", "note"],
+                                "description": "Type of memory",
+                                "default": "note"
+                            },
+                            "context": {
+                                "type": "string",
+                                "description": "Additional context"
+                            }
+                        },
+                        "required": ["what"]
+                    }
+                ),
+                Tool(
+                    name="crucible_recall",
+                    description="Retrieve information from memory by search or filters.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search term"
+                            },
+                            "category": {
+                                "type": "string",
+                                "description": "Filter by category"
+                            },
+                            "project": {
+                                "type": "string",
+                                "description": "Filter by project"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum results",
+                                "default": 10
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_recall_project",
+                    description="Get all context and history for a specific project.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "project": {
+                                "type": "string",
+                                "description": "Project name"
+                            }
+                        },
+                        "required": ["project"]
+                    }
+                ),
+                Tool(
+                    name="crucible_learn",
+                    description="Learn a fact about a codebase, tool, or pattern.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "subject": {
+                                "type": "string",
+                                "description": "What the fact is about"
+                            },
+                            "fact": {
+                                "type": "string",
+                                "description": "The fact to learn"
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["codebase", "user", "tool", "api", "pattern"],
+                                "description": "Type of knowledge",
+                                "default": "codebase"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "How confident (0-1)",
+                                "default": 1.0
+                            },
+                            "tags": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Tags for searching"
+                            }
+                        },
+                        "required": ["subject", "fact"]
+                    }
+                ),
+                Tool(
+                    name="crucible_learn_preference",
+                    description="Learn a user preference for future sessions.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "preference": {
+                                "type": "string",
+                                "description": "Preference name"
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Preference value"
+                            }
+                        },
+                        "required": ["preference", "value"]
+                    }
+                ),
+                Tool(
+                    name="crucible_context",
+                    description="Get current context including session, working memory, and user preferences.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_reflect",
+                    description="Get a full summary of all memory systems.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_task_start",
+                    description="Start a task within the current session to enable working memory.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "description": {
+                                "type": "string",
+                                "description": "What we're trying to accomplish"
+                            }
+                        },
+                        "required": ["description"]
+                    }
+                ),
+                Tool(
+                    name="crucible_task_complete",
+                    description="Complete the current task.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "summary": {
+                                "type": "string",
+                                "description": "Completion summary"
+                            }
+                        }
+                    }
+                ),
+                # Maintenance Tools
+                Tool(
+                    name="crucible_maintenance",
+                    description="Run memory maintenance (archive old sessions, decay stale facts, cleanup).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "archive_days": {
+                                "type": "integer",
+                                "description": "Archive sessions older than this many days",
+                                "default": 7
+                            },
+                            "decay_days": {
+                                "type": "integer",
+                                "description": "Decay facts unverified for this many days",
+                                "default": 30
+                            },
+                            "cleanup_days": {
+                                "type": "integer",
+                                "description": "Clean up working memory older than this",
+                                "default": 3
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_memory_stats",
+                    description="Get memory usage statistics.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
             ]
 
         @self.server.call_tool()
@@ -320,6 +575,89 @@ class CrucibleServer:
             return self.fixture_store.list_fixtures(
                 category=args.get("category")
             )
+
+        # Memory System Tools
+        elif name == "crucible_session_start":
+            return self.memory_tools.session_start(
+                project=args.get("project"),
+                project_path=args.get("project_path"),
+                goal=args.get("goal")
+            )
+
+        elif name == "crucible_session_resume":
+            return self.memory_tools.session_resume(
+                session_id=args["session_id"]
+            )
+
+        elif name == "crucible_session_end":
+            return self.memory_tools.session_end(
+                quality_score=args.get("quality_score")
+            )
+
+        elif name == "crucible_session_status":
+            return self.memory_tools.session_status()
+
+        elif name == "crucible_remember":
+            return self.memory_tools.remember(
+                what=args["what"],
+                category=args.get("category", "note"),
+                context=args.get("context")
+            )
+
+        elif name == "crucible_recall":
+            return self.memory_tools.recall(
+                query=args.get("query"),
+                category=args.get("category"),
+                project=args.get("project"),
+                limit=args.get("limit", 10)
+            )
+
+        elif name == "crucible_recall_project":
+            return self.memory_tools.recall_project(
+                project=args["project"]
+            )
+
+        elif name == "crucible_learn":
+            return self.memory_tools.learn(
+                subject=args["subject"],
+                fact=args["fact"],
+                category=args.get("category", "codebase"),
+                confidence=args.get("confidence", 1.0),
+                tags=args.get("tags")
+            )
+
+        elif name == "crucible_learn_preference":
+            return self.memory_tools.learn_preference(
+                preference=args["preference"],
+                value=args["value"]
+            )
+
+        elif name == "crucible_context":
+            return self.memory_tools.context()
+
+        elif name == "crucible_reflect":
+            return self.memory_tools.reflect()
+
+        elif name == "crucible_task_start":
+            return self.memory_tools.task_start(
+                description=args["description"]
+            )
+
+        elif name == "crucible_task_complete":
+            return self.memory_tools.task_complete(
+                summary=args.get("summary")
+            )
+
+        # Maintenance Tools
+        elif name == "crucible_maintenance":
+            return self.memory_tools.maintenance(
+                archive_days=args.get("archive_days", 7),
+                decay_days=args.get("decay_days", 30),
+                cleanup_days=args.get("cleanup_days", 3)
+            )
+
+        elif name == "crucible_memory_stats":
+            return self.memory_tools.memory_stats()
 
         else:
             return f"Unknown tool: {name}"

@@ -39,6 +39,12 @@ learnings/projects/*.yaml
 !learnings/.gitkeep
 !learnings/projects/.gitkeep
 
+# Memory data (keep structure, not content)
+data/memory/**/*.yaml
+data/memory/**/*.json
+!data/.gitkeep
+!data/memory/.gitkeep
+
 # Temp files
 *.log
 *.tmp

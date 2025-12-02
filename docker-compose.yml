@@ -1,0 +1,60 @@
+# Crucible Docker Compose Configuration
+#
+# This provides a complete Crucible stack with:
+# - Crucible MCP Server
+# - Persistent data volumes
+# - Docker-in-Docker for isolated code execution
+#
+# Usage:
+#   docker-compose up -d     # Start Crucible
+#   docker-compose logs -f   # View logs
+#   docker-compose down      # Stop Crucible
+
+version: '3.8'
+
+services:
+  crucible:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crucible
+    restart: unless-stopped
+
+    # For Docker-in-Docker (isolated code execution)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - crucible-data:/crucible/data
+      - crucible-fixtures:/crucible/fixtures
+      - crucible-learnings:/crucible/learnings
+
+    # Network for potential HTTP transport
+    ports:
+      - "8080:8080"
+
+    # Run as crucible user but with docker group access
+    # Note: May need to adjust group ID to match host's docker group
+    user: crucible
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CRUCIBLE_DATA_DIR=/crucible/data
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "from server.main import CrucibleServer; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Stdin/stdout for MCP stdio transport
+    stdin_open: true
+    tty: true
+
+volumes:
+  crucible-data:
+    name: crucible-data
+  crucible-fixtures:
+    name: crucible-fixtures
+  crucible-learnings:
+    name: crucible-learnings

@@ -106,6 +106,97 @@ Crucible/
 
 ---
 
+## 2024-12-02 - Memory System Implementation
+
+### Session Goals
+- Add persistent memory system to Crucible
+- Create Docker deployment option
+- Enable context preservation across terminal sessions
+
+### Context
+User identified that context loss when closing terminal is a major problem. Built a complete memory system to address this:
+- Session memory tracks current work
+- Episodic memory archives past sessions
+- Semantic memory stores facts and knowledge
+- Working memory provides task-level scratch pad
+
+### Completed
+- [x] Memory System Architecture
+  - SessionMemory: Current session state tracking
+  - EpisodicMemory: Past session history
+  - SemanticMemory: Facts and knowledge storage
+  - WorkingMemory: Active task context
+  - MemoryManager: Unified interface
+- [x] Memory MCP Tools
+  - crucible_session_start/resume/end/status
+  - crucible_remember (file, decision, problem, insight)
+  - crucible_recall/recall_project
+  - crucible_learn/learn_preference
+  - crucible_context/reflect
+  - crucible_task_start/task_complete
+- [x] Memory Janitor (automated cleanup)
+  - Archive old sessions
+  - Decay stale fact confidence
+  - Clean up working memory
+  - Remove duplicate facts
+  - crucible_maintenance/memory_stats tools
+- [x] Docker Deployment
+  - Dockerfile for containerized deployment
+  - docker-compose.yml with persistent volumes
+  - Alternative to VM setup
+- [x] Documentation Updates
+  - Updated CLAUDE_CONTEXT.md with memory system
+  - Created MEMORY.md with detailed docs
+  - Updated README.md with Docker and memory info
+
+### Files Created/Modified
+```
+server/memory/
+├── __init__.py
+├── manager.py      # Unified memory interface
+├── session.py      # Session state management
+├── episodic.py     # Episode history
+├── semantic.py     # Facts and knowledge
+├── working.py      # Task context
+└── janitor.py      # Automated cleanup
+
+server/tools/memory.py    # MCP tools for memory
+server/main.py            # Updated with memory tools
+
+Dockerfile                # Docker build
+docker-compose.yml        # Docker compose
+data/                     # Memory data directory
+
+docs/MEMORY.md           # Memory system documentation
+```
+
+### New MCP Tools Added
+| Tool | Purpose |
+|------|---------|
+| crucible_session_start | Begin memory session |
+| crucible_session_resume | Resume previous session |
+| crucible_session_end | End and archive session |
+| crucible_session_status | Get session state |
+| crucible_remember | Store memories |
+| crucible_recall | Query memory |
+| crucible_recall_project | Get project context |
+| crucible_learn | Learn facts |
+| crucible_learn_preference | Learn preferences |
+| crucible_context | Get current context |
+| crucible_reflect | Full memory summary |
+| crucible_task_start | Start task |
+| crucible_task_complete | Complete task |
+| crucible_maintenance | Run cleanup |
+| crucible_memory_stats | Get stats |
+
+### Next Steps
+- [ ] Deploy on TrueNAS server (VM or Docker)
+- [ ] Test memory persistence across sessions
+- [ ] Integrate with EMBER for orchestrated workflows
+- [ ] Add scheduled janitor (cron/systemd timer)
+
+---
+
 ## Template for Future Entries
 
 ```markdown
