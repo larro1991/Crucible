@@ -1,0 +1,13 @@
+{
+  "enabled": {
+    "devops": true
+  },
+  "settings": {
+    "devops": {
+      "allowed_paths": ["/mnt", "/appdata", "/home", "/tmp", "/var/log", "/crucible"],
+      "blocked_commands": ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "chmod -R 777 /", "chown -R"],
+      "docker_enabled": true,
+      "max_file_size_mb": 10
+    }
+  }
+}

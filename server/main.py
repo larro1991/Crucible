@@ -42,6 +42,7 @@ from .persistence.fixtures import FixtureStore
 from .persistence.learnings import LearningsStore
 from .memory.manager import MemoryManager
 from .memory.janitor import MemoryJanitor
+from .plugins import get_plugin_manager
 
 # Configure logging
 logging.basicConfig(
@@ -89,6 +90,10 @@ class CrucibleServer:
         self.learnings_tool = LearningsTool(self.learnings_store)
         self.memory_tools = MemoryTools(self.memory_manager)
         self.maintenance_tools = MaintenanceTools(BASE_DIR, self.memory_janitor)
+
+        # Plugin system
+        self.plugin_manager = get_plugin_manager()
+        self.plugin_manager.load_enabled_plugins()
 
         if HAS_MCP:
             self.server = Server("crucible")
@@ -612,7 +617,58 @@ class CrucibleServer:
                         "properties": {}
                     }
                 ),
-            ]
+                # Plugin Management Tools
+                Tool(
+                    name="crucible_plugin_list",
+                    description="List available and loaded plugins.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_plugin_load",
+                    description="Load a plugin to add new tools.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Plugin name (e.g., 'devops')"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                ),
+                Tool(
+                    name="crucible_plugin_unload",
+                    description="Unload a plugin to remove its tools.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Plugin name to unload"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                ),
+                Tool(
+                    name="crucible_plugin_reload",
+                    description="Reload a plugin (picks up code changes).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Plugin name to reload"
+                            }
+                        },
+                        "required": ["name"]
+                    }
+                ),
+            ] + self.plugin_manager.get_tools()
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
@@ -794,7 +850,42 @@ class CrucibleServer:
         elif name == "crucible_docker_status":
             return self.maintenance_tools.docker_status()
 
+        # Plugin Management Tools
+        elif name == "crucible_plugin_list":
+            return self.plugin_manager.status()
+
+        elif name == "crucible_plugin_load":
+            plugin_name = args.get("name")
+            if not plugin_name:
+                return "Error: plugin name required"
+            success = self.plugin_manager.load_plugin(plugin_name)
+            if success:
+                return f"Plugin '{plugin_name}' loaded successfully.\n\n{self.plugin_manager.status()}"
+            return f"Failed to load plugin '{plugin_name}'"
+
+        elif name == "crucible_plugin_unload":
+            plugin_name = args.get("name")
+            if not plugin_name:
+                return "Error: plugin name required"
+            success = self.plugin_manager.unload_plugin(plugin_name)
+            if success:
+                return f"Plugin '{plugin_name}' unloaded.\n\n{self.plugin_manager.status()}"
+            return f"Failed to unload plugin '{plugin_name}'"
+
+        elif name == "crucible_plugin_reload":
+            plugin_name = args.get("name")
+            if not plugin_name:
+                return "Error: plugin name required"
+            success = self.plugin_manager.reload_plugin(plugin_name)
+            if success:
+                return f"Plugin '{plugin_name}' reloaded.\n\n{self.plugin_manager.status()}"
+            return f"Failed to reload plugin '{plugin_name}'"
+
         else:
+            # Check if plugin can handle this tool
+            result = await self.plugin_manager.handle_tool(name, args)
+            if result is not None:
+                return result
             return f"Unknown tool: {name}"
 
     async def run_stdio(self):

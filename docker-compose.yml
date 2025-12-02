@@ -3,14 +3,13 @@
 # This provides a complete Crucible stack with:
 # - Crucible MCP Server
 # - Persistent data volumes
-# - Docker-in-Docker for isolated code execution
+# - Docker management via socket
+# - Access to host appdata directories
 #
 # Usage:
 #   docker-compose up -d     # Start Crucible
 #   docker-compose logs -f   # View logs
 #   docker-compose down      # Stop Crucible
-
-version: '3.8'
 
 services:
   crucible:
@@ -20,24 +19,32 @@ services:
     container_name: crucible
     restart: unless-stopped
 
-    # For Docker-in-Docker (isolated code execution)
+    # Volume mounts for Docker access and host filesystem
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Docker socket for container management
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Crucible's own data
       - crucible-data:/crucible/data
       - crucible-fixtures:/crucible/fixtures
       - crucible-learnings:/crucible/learnings
+      # Host appdata access (adjust paths per deployment)
+      - ${APPDATA_PATH:-/mnt/Main/appdata}:/appdata:rw
+      # Host mnt access for broader file operations
+      - /mnt:/mnt:rw
 
     # Network for potential HTTP transport
     ports:
       - "8080:8080"
 
-    # Run as crucible user but with docker group access
-    # Note: May need to adjust group ID to match host's docker group
-    user: crucible
+    # Run as root to access docker socket
+    # Security: socket access is the main concern, not user
+    user: root
 
     environment:
       - PYTHONUNBUFFERED=1
       - CRUCIBLE_DATA_DIR=/crucible/data
+      # Plugin configuration
+      - CRUCIBLE_DEVOPS_PATHS=/appdata,/mnt,/tmp
 
     # Health check
     healthcheck:
