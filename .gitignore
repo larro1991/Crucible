@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+fixtures/**/*.txt
+fixtures/**/*.json
+!fixtures/.gitkeep
+learnings/*.yaml
+learnings/projects/*.yaml
+!learnings/.gitkeep
+!learnings/projects/.gitkeep
+
+# Temp files
+*.log
+*.tmp

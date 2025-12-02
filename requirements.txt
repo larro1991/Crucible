@@ -1,0 +1,19 @@
+# Crucible - AI Development Verification Infrastructure
+
+# MCP SDK
+mcp>=0.1.0
+
+# Core
+PyYAML>=6.0
+
+# Verification tools (optional but recommended)
+mypy>=1.8.0
+flake8>=7.0.0
+bandit>=1.7.0
+
+# Async
+aiohttp>=3.9.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
