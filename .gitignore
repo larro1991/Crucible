@@ -45,6 +45,14 @@ data/memory/**/*.json
 !data/.gitkeep
 !data/memory/.gitkeep
 
+# Maintenance directories (keep structure, not content)
+temp/*
+!temp/.gitkeep
+logs/*
+!logs/.gitkeep
+cache/*
+!cache/.gitkeep
+
 # Temp files
 *.log
 *.tmp

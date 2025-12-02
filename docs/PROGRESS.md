@@ -193,7 +193,89 @@ docs/MEMORY.md           # Memory system documentation
 - [ ] Deploy on TrueNAS server (VM or Docker)
 - [ ] Test memory persistence across sessions
 - [ ] Integrate with EMBER for orchestrated workflows
-- [ ] Add scheduled janitor (cron/systemd timer)
+
+---
+
+## 2024-12-02 - System Janitor Implementation
+
+### Session Goals
+- Add comprehensive system maintenance/cleanup
+- Cover filesystem, Docker, and memory cleanup
+- Provide MCP tools for on-demand and scheduled cleanup
+
+### Completed
+- [x] Filesystem Janitor (server/maintenance/filesystem.py)
+  - Clean temp files (configurable age)
+  - Rotate/trim log files (age + size limits)
+  - Clean cache files
+  - Clean execution artifacts
+  - Disk usage reporting
+- [x] Docker Janitor (server/maintenance/docker_cleanup.py)
+  - Remove stopped containers
+  - Prune dangling images
+  - Prune unused volumes (opt-in, dangerous)
+  - Clear build cache
+  - Docker resource stats
+- [x] System Janitor (server/maintenance/system.py)
+  - Unified interface to all janitors
+  - Quick, deep, and full cleanup modes
+  - Command-line entry point for cron/systemd
+  - Complete system status reporting
+- [x] Maintenance MCP Tools
+  - crucible_cleanup: Run cleanup (quick/deep/full)
+  - crucible_cleanup_docker: Docker-specific cleanup
+  - crucible_cleanup_filesystem: Filesystem-specific cleanup
+  - crucible_system_status: Get system status
+  - crucible_disk_usage: Get disk usage
+  - crucible_docker_status: Get Docker stats
+
+### New MCP Tools Added
+| Tool | Purpose |
+|------|---------|
+| crucible_cleanup | Run system cleanup (quick/deep/full) |
+| crucible_cleanup_docker | Docker cleanup (containers, images, volumes) |
+| crucible_cleanup_filesystem | Filesystem cleanup (temp, logs, cache) |
+| crucible_system_status | Get complete system status |
+| crucible_disk_usage | Get Crucible disk usage |
+| crucible_docker_status | Get Docker resource status |
+
+### Cleanup Modes
+- **quick**: Safe for frequent runs (hourly) - gentle settings
+- **deep**: Weekly maintenance - more aggressive
+- **full**: Full cleanup with all options
+
+### Files Created
+```
+server/maintenance/
+├── __init__.py
+├── filesystem.py    # Temp, logs, cache cleanup
+├── docker_cleanup.py # Docker resource cleanup
+└── system.py        # Unified janitor interface
+
+server/tools/maintenance.py  # MCP tools
+
+temp/                # Temp files directory
+logs/                # Log files directory
+cache/               # Cache directory
+```
+
+### Scheduled Maintenance
+Can be run via cron or systemd timer:
+```bash
+# Quick cleanup (hourly)
+python -m server.maintenance.system quick
+
+# Deep cleanup (weekly)
+python -m server.maintenance.system deep
+
+# Status report
+python -m server.maintenance.system status
+```
+
+### Next Steps
+- [ ] Deploy on TrueNAS server
+- [ ] Set up systemd timer for scheduled maintenance
+- [ ] Test all cleanup modes
 
 ---
 

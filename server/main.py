@@ -37,9 +37,11 @@ from .tools.verify import VerificationTool
 from .tools.capture import CaptureTool
 from .tools.learn import LearningsTool
 from .tools.memory import MemoryTools
+from .tools.maintenance import MaintenanceTools
 from .persistence.fixtures import FixtureStore
 from .persistence.learnings import LearningsStore
 from .memory.manager import MemoryManager
+from .memory.janitor import MemoryJanitor
 
 # Configure logging
 logging.basicConfig(
@@ -65,6 +67,7 @@ class CrucibleServer:
     - Fixture capture and management
     - Persistent learnings across sessions
     - Memory system (session, episodic, semantic, working)
+    - System maintenance (filesystem, Docker, memory cleanup)
     """
 
     def __init__(self):
@@ -72,11 +75,20 @@ class CrucibleServer:
         self.learnings_store = LearningsStore(LEARNINGS_DIR)
         self.memory_manager = MemoryManager(DATA_DIR)
 
+        # Create memory janitor for maintenance integration
+        self.memory_janitor = MemoryJanitor(
+            self.memory_manager.session,
+            self.memory_manager.episodic,
+            self.memory_manager.semantic,
+            self.memory_manager.working
+        )
+
         self.execution_tool = ExecutionTool()
         self.verification_tool = VerificationTool()
         self.capture_tool = CaptureTool(self.fixture_store)
         self.learnings_tool = LearningsTool(self.learnings_store)
         self.memory_tools = MemoryTools(self.memory_manager)
+        self.maintenance_tools = MaintenanceTools(BASE_DIR, self.memory_janitor)
 
         if HAS_MCP:
             self.server = Server("crucible")
@@ -507,6 +519,99 @@ class CrucibleServer:
                         "properties": {}
                     }
                 ),
+                # System Maintenance Tools
+                Tool(
+                    name="crucible_cleanup",
+                    description="Run system cleanup (memory, filesystem, Docker). Modes: 'quick' (safe, frequent), 'deep' (weekly), 'full' (aggressive).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "mode": {
+                                "type": "string",
+                                "enum": ["quick", "deep", "full"],
+                                "description": "Cleanup mode",
+                                "default": "quick"
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_cleanup_docker",
+                    description="Docker-specific cleanup: containers, images, volumes, build cache.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "containers": {
+                                "type": "boolean",
+                                "description": "Remove stopped containers",
+                                "default": True
+                            },
+                            "images": {
+                                "type": "boolean",
+                                "description": "Prune dangling images",
+                                "default": True
+                            },
+                            "volumes": {
+                                "type": "boolean",
+                                "description": "Prune unused volumes (DANGEROUS!)",
+                                "default": False
+                            },
+                            "cache": {
+                                "type": "boolean",
+                                "description": "Prune build cache",
+                                "default": True
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_cleanup_filesystem",
+                    description="Filesystem cleanup: temp files, logs, cache, execution artifacts.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "temp_hours": {
+                                "type": "integer",
+                                "description": "Delete temp files older than this many hours",
+                                "default": 24
+                            },
+                            "log_days": {
+                                "type": "integer",
+                                "description": "Delete logs older than this many days",
+                                "default": 7
+                            },
+                            "cache_days": {
+                                "type": "integer",
+                                "description": "Delete cache older than this many days",
+                                "default": 30
+                            }
+                        }
+                    }
+                ),
+                Tool(
+                    name="crucible_system_status",
+                    description="Get complete system status (disk usage, Docker stats, memory stats).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_disk_usage",
+                    description="Get detailed disk usage for Crucible directories.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
+                Tool(
+                    name="crucible_docker_status",
+                    description="Get Docker resource status (containers, images, volumes).",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
+                    }
+                ),
             ]
 
         @self.server.call_tool()
@@ -658,6 +763,36 @@ class CrucibleServer:
 
         elif name == "crucible_memory_stats":
             return self.memory_tools.memory_stats()
+
+        # System Maintenance Tools
+        elif name == "crucible_cleanup":
+            return self.maintenance_tools.cleanup(
+                mode=args.get("mode", "quick")
+            )
+
+        elif name == "crucible_cleanup_docker":
+            return self.maintenance_tools.cleanup_docker(
+                containers=args.get("containers", True),
+                images=args.get("images", True),
+                volumes=args.get("volumes", False),
+                cache=args.get("cache", True)
+            )
+
+        elif name == "crucible_cleanup_filesystem":
+            return self.maintenance_tools.cleanup_filesystem(
+                temp_hours=args.get("temp_hours", 24),
+                log_days=args.get("log_days", 7),
+                cache_days=args.get("cache_days", 30)
+            )
+
+        elif name == "crucible_system_status":
+            return self.maintenance_tools.system_status()
+
+        elif name == "crucible_disk_usage":
+            return self.maintenance_tools.disk_usage()
+
+        elif name == "crucible_docker_status":
+            return self.maintenance_tools.docker_status()
 
         else:
             return f"Unknown tool: {name}"

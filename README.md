@@ -131,6 +131,17 @@ For SSH to VM:
 | `crucible_context` | Get current working context |
 | `crucible_reflect` | Full memory system summary |
 
+### System Maintenance
+
+| Tool | Purpose |
+|------|---------|
+| `crucible_cleanup` | Run cleanup (quick/deep/full modes) |
+| `crucible_cleanup_docker` | Docker cleanup (containers, images, volumes) |
+| `crucible_cleanup_filesystem` | Filesystem cleanup (temp, logs, cache) |
+| `crucible_system_status` | Get complete system status |
+| `crucible_disk_usage` | Get Crucible disk usage |
+| `crucible_docker_status` | Get Docker resource status |
+
 ## Memory System
 
 The memory system provides Claude with persistent context:
