@@ -43,6 +43,7 @@ from .persistence.learnings import LearningsStore
 from .memory.manager import MemoryManager
 from .memory.janitor import MemoryJanitor
 from .plugins import get_plugin_manager
+from .tools.robust_session import TOOLS as ROBUST_SESSION_TOOLS, HANDLERS as ROBUST_SESSION_HANDLERS
 
 # Configure logging
 logging.basicConfig(
@@ -668,7 +669,7 @@ class CrucibleServer:
                         "required": ["name"]
                     }
                 ),
-            ] + self.plugin_manager.get_tools()
+            ] + ROBUST_SESSION_TOOLS + self.plugin_manager.get_tools()
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
@@ -880,6 +881,11 @@ class CrucibleServer:
             if success:
                 return f"Plugin '{plugin_name}' reloaded.\n\n{self.plugin_manager.status()}"
             return f"Failed to reload plugin '{plugin_name}'"
+
+        # Check robust session handlers
+        elif name in ROBUST_SESSION_HANDLERS:
+            handler = ROBUST_SESSION_HANDLERS[name]
+            return await handler(args)
 
         else:
             # Check if plugin can handle this tool
