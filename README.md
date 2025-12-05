@@ -142,6 +142,57 @@ For SSH to VM:
 | `crucible_disk_usage` | Get Crucible disk usage |
 | `crucible_docker_status` | Get Docker resource status |
 
+### Robust Session Management
+
+Connection-resilient sessions with operation tracking and recovery:
+
+| Tool | Purpose |
+|------|---------|
+| `crucible_robust_start` | Start session with WAL and checkpointing |
+| `crucible_robust_resume` | Resume session after connection drop |
+| `crucible_robust_status` | Get comprehensive session status |
+| `crucible_robust_checkpoint` | Force immediate state checkpoint |
+| `crucible_robust_end` | End session with summary |
+| `crucible_op_status` | Get operation status by ID |
+| `crucible_op_list` | List operations (pending/failed/history) |
+| `crucible_op_retry` | Retry failed operation |
+
+### Session Organization
+
+| Tool | Purpose |
+|------|---------|
+| `crucible_session_rename` | Rename a session |
+| `crucible_session_search` | Search sessions by query/tags/project |
+| `crucible_session_delete` | Delete a session |
+| `crucible_session_clone` | Clone an existing session |
+| `crucible_session_export` | Export session to JSON |
+| `crucible_session_import` | Import session from JSON |
+| `crucible_github_connect` | Connect GitHub repo to session |
+| `crucible_doc_add` | Attach document to session |
+| `crucible_tags_add` | Add tags for organization |
+
+### Templates & Analytics
+
+| Tool | Purpose |
+|------|---------|
+| `crucible_template_list` | List session templates |
+| `crucible_template_use` | Start session from template |
+| `crucible_template_create` | Create custom template |
+| `crucible_analytics_summary` | Get overall statistics |
+| `crucible_analytics_project` | Get project-level stats |
+| `crucible_analytics_timeline` | Get activity timeline |
+
+### Standard Operating Procedures (SOP)
+
+| Tool | Purpose |
+|------|---------|
+| `sop_core_principles` | Get 4 immutable core principles |
+| `sop_current` | Get active SOP and work pattern |
+| `sop_activate` | Switch active SOP |
+| `sop_procedure` | Get procedure steps |
+| `sop_checklist` | Get checklist items |
+| `work_patterns_list` | List available work patterns |
+
 ## Memory System
 
 The memory system provides Claude with persistent context:
@@ -155,6 +206,24 @@ The memory system provides Claude with persistent context:
 
 See [docs/MEMORY.md](docs/MEMORY.md) for full documentation.
 
+## Standard Operating Procedures (SOP)
+
+Ember follows a hierarchical principle system:
+
+### Core Principles (Immutable Gate)
+Every response must pass ALL 4 before proceeding:
+1. **Honesty** - Be truthful and accurate. Never deceive or mislead.
+2. **Kindness** - Act with compassion and consideration. Avoid harm.
+3. **Trust** - Be reliable and dependable. Honor commitments.
+4. **Transparency** - Be open about capabilities, limitations, and reasoning.
+
+### Work Patterns
+- **default** - Methodical & Thorough (balanced approach)
+- **thorough** - Extra verification and documentation
+- **fast** - Quick execution with essential checks
+- **careful** - Extra caution, always ask before acting
+- **learning** - Educational mode, explain everything
+
 ## Directory Structure
 
 ```
@@ -166,13 +235,25 @@ Crucible/
 │   │   ├── verify.py    # Verification pipeline
 │   │   ├── capture.py   # Fixture capture
 │   │   ├── learn.py     # Learnings management
-│   │   └── memory.py    # Memory system tools
+│   │   ├── memory.py    # Memory system tools
+│   │   └── robust_session.py  # Session management tools
+│   ├── session/         # Robust session system
+│   │   ├── manager.py   # RobustSessionManager
+│   │   ├── operations.py # Operation tracking
+│   │   ├── wal.py       # Write-ahead log
+│   │   ├── checkpoint.py # Checkpointing
+│   │   ├── templates.py # Session templates
+│   │   └── sop.py       # Standard operating procedures
 │   ├── memory/          # Memory system
 │   │   ├── manager.py   # Unified interface
 │   │   ├── session.py   # Session memory
 │   │   ├── episodic.py  # Episode history
 │   │   ├── semantic.py  # Facts & knowledge
 │   │   └── working.py   # Task context
+│   ├── plugins/         # Hot-loadable plugins
+│   │   ├── voice.py     # Voice interface (STT/TTS)
+│   │   ├── personality.py # Personality system
+│   │   └── devops.py    # DevOps tools
 │   └── persistence/     # Storage layer
 ├── fixtures/            # Stored test data
 ├── learnings/           # Persistent knowledge
