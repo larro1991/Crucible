@@ -442,6 +442,191 @@ Documents can be files, URLs, or text snippets that provide context.""",
             "required": ["tags"]
         }
     ),
+    # Template Tools
+    Tool(
+        name="crucible_template_list",
+        description="""List available session templates.
+
+Built-in templates: blank, bugfix, feature, refactor, research, review, ops""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
+    Tool(
+        name="crucible_template_use",
+        description="""Start a new session from a template.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "template_id": {
+                    "type": "string",
+                    "description": "Template ID to use"
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project name"
+                },
+                "project_path": {
+                    "type": "string",
+                    "description": "Path to project"
+                },
+                "goal_vars": {
+                    "type": "object",
+                    "description": "Variables to fill in the goal template"
+                }
+            },
+            "required": ["template_id", "project", "project_path"]
+        }
+    ),
+    Tool(
+        name="crucible_template_create",
+        description="""Create a new custom template.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Template name"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "What this template is for"
+                },
+                "goal_template": {
+                    "type": "string",
+                    "description": "Goal with {placeholders}"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Default tags"
+                }
+            },
+            "required": ["name", "description"]
+        }
+    ),
+    Tool(
+        name="crucible_template_from_session",
+        description="""Create a template from an existing session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to create template from"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Name for the new template"
+                }
+            },
+            "required": ["session_id", "name"]
+        }
+    ),
+    # Export/Import Tools
+    Tool(
+        name="crucible_session_export",
+        description="""Export a session to a JSON file for backup.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to export"
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Output file path (optional)"
+                },
+                "include_checkpoints": {
+                    "type": "boolean",
+                    "description": "Include checkpoint data (default: true)"
+                }
+            },
+            "required": ["session_id"]
+        }
+    ),
+    Tool(
+        name="crucible_session_import",
+        description="""Import a session from an exported JSON file.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "input_path": {
+                    "type": "string",
+                    "description": "Path to exported session file"
+                },
+                "new_session_id": {
+                    "type": "string",
+                    "description": "Optional new session ID"
+                }
+            },
+            "required": ["input_path"]
+        }
+    ),
+    Tool(
+        name="crucible_session_clone",
+        description="""Clone an existing session as a new session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to clone"
+                },
+                "new_goal": {
+                    "type": "string",
+                    "description": "Goal for the cloned session"
+                }
+            },
+            "required": ["session_id"]
+        }
+    ),
+    # Analytics Tools
+    Tool(
+        name="crucible_analytics_summary",
+        description="""Get overall session analytics and statistics.""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
+    Tool(
+        name="crucible_analytics_project",
+        description="""Get analytics for a specific project.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project name"
+                }
+            },
+            "required": ["project"]
+        }
+    ),
+    Tool(
+        name="crucible_analytics_timeline",
+        description="""Get session activity timeline.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to analyze (default: 30)"
+                }
+            }
+        }
+    ),
+    Tool(
+        name="crucible_analytics_tags",
+        description="""Get tag usage analysis across all sessions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
 ]
 
 
@@ -751,6 +936,208 @@ async def handle_tags_remove(args: dict) -> str:
     return json.dumps(result, indent=2)
 
 
+# Template Handlers
+async def handle_template_list(args: dict) -> str:
+    """Handle crucible_template_list tool"""
+    from ..session.templates import get_template_manager
+    import json
+
+    tm = get_template_manager()
+    result = tm.list_templates()
+    return json.dumps(result, indent=2)
+
+
+async def handle_template_use(args: dict) -> str:
+    """Handle crucible_template_use tool"""
+    from ..session import get_robust_session_manager
+    from ..session.templates import get_template_manager
+    import json
+
+    tm = get_template_manager()
+    manager = get_robust_session_manager()
+
+    template = tm.get_template(args['template_id'])
+    if not template:
+        return json.dumps({'status': 'error', 'error': 'Template not found'})
+
+    # Fill in goal template
+    goal = template.goal_template
+    if args.get('goal_vars'):
+        try:
+            goal = goal.format(**args['goal_vars'])
+        except KeyError as e:
+            goal = template.goal_template  # Use as-is if vars missing
+
+    result = await manager.start_session(
+        project=args['project'],
+        project_path=args['project_path'],
+        goal=goal or f"Session from template: {template.name}",
+        context=template.context.copy()
+    )
+
+    # Add template tags
+    if template.tags:
+        manager.add_tags(template.tags)
+
+    # Connect GitHub if specified
+    if template.github_repo:
+        manager.connect_github(template.github_repo)
+
+    tm.record_use(args['template_id'])
+
+    result['template'] = template.name
+    return json.dumps(result, indent=2)
+
+
+async def handle_template_create(args: dict) -> str:
+    """Handle crucible_template_create tool"""
+    from ..session.templates import get_template_manager
+    import json
+
+    tm = get_template_manager()
+    result = tm.create_template(
+        name=args['name'],
+        description=args['description'],
+        goal_template=args.get('goal_template', ''),
+        tags=args.get('tags')
+    )
+    return json.dumps(result, indent=2)
+
+
+async def handle_template_from_session(args: dict) -> str:
+    """Handle crucible_template_from_session tool"""
+    from ..session import get_robust_session_manager
+    from ..session.templates import get_template_manager
+    import json
+    from pathlib import Path
+
+    manager = get_robust_session_manager()
+    tm = get_template_manager()
+
+    # Load session data
+    session_file = Path("data/session") / f"robust_{args['session_id']}.json"
+    if not session_file.exists():
+        return json.dumps({'status': 'error', 'error': 'Session not found'})
+
+    with open(session_file, 'r') as f:
+        session_data = json.load(f)
+
+    result = tm.create_template_from_session(session_data, args['name'])
+    return json.dumps(result, indent=2)
+
+
+# Export/Import Handlers
+async def handle_session_export(args: dict) -> str:
+    """Handle crucible_session_export tool"""
+    from ..session.templates import get_exporter
+    import json
+
+    exporter = get_exporter()
+    result = exporter.export_session(
+        session_id=args['session_id'],
+        output_path=args.get('output_path'),
+        include_checkpoints=args.get('include_checkpoints', True)
+    )
+    return json.dumps(result, indent=2)
+
+
+async def handle_session_import(args: dict) -> str:
+    """Handle crucible_session_import tool"""
+    from ..session.templates import get_exporter
+    import json
+
+    exporter = get_exporter()
+    result = exporter.import_session(
+        input_path=args['input_path'],
+        new_session_id=args.get('new_session_id')
+    )
+    return json.dumps(result, indent=2)
+
+
+async def handle_session_clone(args: dict) -> str:
+    """Handle crucible_session_clone tool"""
+    from ..session import get_robust_session_manager
+    from ..session.templates import get_exporter
+    import json
+    from pathlib import Path
+    import tempfile
+
+    exporter = get_exporter()
+    manager = get_robust_session_manager()
+
+    # Export to temp file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        temp_path = f.name
+
+    export_result = exporter.export_session(
+        args['session_id'],
+        temp_path,
+        include_checkpoints=False
+    )
+
+    if export_result['status'] != 'exported':
+        return json.dumps(export_result)
+
+    # Import as new session
+    import_result = exporter.import_session(temp_path)
+
+    # Clean up
+    Path(temp_path).unlink()
+
+    if import_result['status'] == 'imported' and args.get('new_goal'):
+        # Update goal in new session
+        new_session_file = Path("data/session") / f"robust_{import_result['session_id']}.json"
+        with open(new_session_file, 'r') as f:
+            data = json.load(f)
+        data['goal'] = args['new_goal']
+        with open(new_session_file, 'w') as f:
+            json.dump(data, f, indent=2)
+        import_result['goal'] = args['new_goal']
+
+    return json.dumps(import_result, indent=2)
+
+
+# Analytics Handlers
+async def handle_analytics_summary(args: dict) -> str:
+    """Handle crucible_analytics_summary tool"""
+    from ..session.templates import get_analytics
+    import json
+
+    analytics = get_analytics()
+    result = analytics.get_summary_stats()
+    return json.dumps(result, indent=2)
+
+
+async def handle_analytics_project(args: dict) -> str:
+    """Handle crucible_analytics_project tool"""
+    from ..session.templates import get_analytics
+    import json
+
+    analytics = get_analytics()
+    result = analytics.get_project_stats(args['project'])
+    return json.dumps(result, indent=2)
+
+
+async def handle_analytics_timeline(args: dict) -> str:
+    """Handle crucible_analytics_timeline tool"""
+    from ..session.templates import get_analytics
+    import json
+
+    analytics = get_analytics()
+    result = analytics.get_activity_timeline(args.get('days', 30))
+    return json.dumps(result, indent=2)
+
+
+async def handle_analytics_tags(args: dict) -> str:
+    """Handle crucible_analytics_tags tool"""
+    from ..session.templates import get_analytics
+    import json
+
+    analytics = get_analytics()
+    result = analytics.get_tag_analysis()
+    return json.dumps(result, indent=2)
+
+
 # Handler mapping
 HANDLERS = {
     "crucible_robust_start": handle_robust_start,
@@ -780,4 +1167,18 @@ HANDLERS = {
     # Tags
     "crucible_tags_add": handle_tags_add,
     "crucible_tags_remove": handle_tags_remove,
+    # Templates
+    "crucible_template_list": handle_template_list,
+    "crucible_template_use": handle_template_use,
+    "crucible_template_create": handle_template_create,
+    "crucible_template_from_session": handle_template_from_session,
+    # Export/Import
+    "crucible_session_export": handle_session_export,
+    "crucible_session_import": handle_session_import,
+    "crucible_session_clone": handle_session_clone,
+    # Analytics
+    "crucible_analytics_summary": handle_analytics_summary,
+    "crucible_analytics_project": handle_analytics_project,
+    "crucible_analytics_timeline": handle_analytics_timeline,
+    "crucible_analytics_tags": handle_analytics_tags,
 }

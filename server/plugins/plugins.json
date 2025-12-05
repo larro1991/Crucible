@@ -1,7 +1,8 @@
 {
   "enabled": {
     "devops": true,
-    "voice": false
+    "voice": false,
+    "personality": false
   },
   "settings": {
     "devops": {
@@ -18,6 +19,10 @@
       "language": "en",
       "audio_format": "mp3",
       "audio_dir": "data/voice"
+    },
+    "personality": {
+      "data_dir": "data/personalities",
+      "default_personality": "default"
     }
   }
 }
