@@ -1,6 +1,7 @@
 {
   "enabled": {
-    "devops": true
+    "devops": true,
+    "voice": false
   },
   "settings": {
     "devops": {
@@ -8,6 +9,15 @@
       "blocked_commands": ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "chmod -R 777 /", "chown -R"],
       "docker_enabled": true,
       "max_file_size_mb": 10
+    },
+    "voice": {
+      "stt_backend": "whisper_api",
+      "tts_backend": "edge",
+      "voice_id": "alloy",
+      "elevenlabs_voice": "Rachel",
+      "language": "en",
+      "audio_format": "mp3",
+      "audio_dir": "data/voice"
     }
   }
 }
