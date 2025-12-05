@@ -71,6 +71,36 @@ class WorkPattern:
         return cls(**data)
 
 
+# The 4 Immutable Core Principles - These form the mandatory gate
+# Every response MUST pass through these before any other principles apply
+CORE_PRINCIPLES = [
+    {
+        "id": "honesty",
+        "name": "Honesty",
+        "description": "Be truthful and accurate. Never deceive or mislead.",
+        "evaluation": "Is this response truthful? Am I being accurate and not misleading?"
+    },
+    {
+        "id": "kindness",
+        "name": "Kindness",
+        "description": "Act with compassion and consideration. Avoid harm.",
+        "evaluation": "Is this response kind? Am I being considerate and not causing unnecessary harm?"
+    },
+    {
+        "id": "trust",
+        "name": "Trust",
+        "description": "Be reliable and dependable. Honor commitments.",
+        "evaluation": "Does this maintain trust? Am I being reliable and honoring expectations?"
+    },
+    {
+        "id": "transparency",
+        "name": "Transparency",
+        "description": "Be open about capabilities, limitations, and reasoning.",
+        "evaluation": "Am I being transparent? Are my limitations and reasoning clear?"
+    },
+]
+
+
 @dataclass
 class StandardOperatingProcedure:
     """Complete SOP combining work patterns with specific procedures"""
@@ -78,7 +108,7 @@ class StandardOperatingProcedure:
     name: str
     description: str
 
-    # Core principles
+    # Secondary principles (apply AFTER core principles pass)
     principles: List[str] = field(default_factory=list)
 
     # Work pattern reference
@@ -96,6 +126,11 @@ class StandardOperatingProcedure:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'StandardOperatingProcedure':
         return cls(**data)
+
+    @staticmethod
+    def get_core_principles() -> List[Dict[str, str]]:
+        """Return the 4 immutable core principles that gate all responses"""
+        return CORE_PRINCIPLES
 
 
 # Built-in work patterns
@@ -495,8 +530,12 @@ class SOPManager:
         sop = self.get_active_sop()
         return sop.checklists.get(checklist_name, [])
 
+    def get_core_principles(self) -> List[Dict[str, str]]:
+        """Get the 4 immutable core principles (the gate)"""
+        return CORE_PRINCIPLES
+
     def get_principles(self) -> List[str]:
-        """Get principles from active SOP"""
+        """Get secondary principles from active SOP (apply after core gate)"""
         return self.get_active_sop().principles
 
     def should_use_todo_list(self) -> bool:
@@ -519,8 +558,23 @@ class SOPManager:
         prompt_parts = [
             f"Operating under: {sop.name}",
             "",
-            "Core Principles:",
+            "=" * 50,
+            "CORE PRINCIPLES (Immutable Gate)",
+            "=" * 50,
+            "Before ANY response, these 4 principles MUST be evaluated and passed:",
+            "",
         ]
+
+        for i, cp in enumerate(CORE_PRINCIPLES, 1):
+            prompt_parts.append(f"{i}. {cp['name'].upper()}: {cp['description']}")
+            prompt_parts.append(f"   Evaluate: {cp['evaluation']}")
+
+        prompt_parts.append("")
+        prompt_parts.append("Only after ALL core principles pass, proceed to:")
+        prompt_parts.append("")
+        prompt_parts.append("-" * 50)
+        prompt_parts.append("Secondary Principles (Work Guidelines)")
+        prompt_parts.append("-" * 50)
 
         for i, principle in enumerate(sop.principles[:5], 1):
             prompt_parts.append(f"{i}. {principle}")
@@ -608,6 +662,14 @@ def get_sop_tools():
                 description="List available work patterns (default, thorough, fast, careful, learning)",
                 inputSchema={"type": "object", "properties": {}}
             ),
+            Tool(
+                name="sop_core_principles",
+                description="""Get the 4 immutable core principles that form the mandatory gate.
+
+These principles (Honesty, Kindness, Trust, Transparency) MUST be evaluated
+and passed before ANY other principles or work patterns apply.""",
+                inputSchema={"type": "object", "properties": {}}
+            ),
         ]
     except ImportError:
         return []
@@ -628,10 +690,14 @@ async def handle_sop_current(args: dict) -> str:
     sop = sm.get_active_sop()
     pattern = sm.get_active_work_pattern()
     return json.dumps({
+        'core_principles': {
+            'description': 'Immutable gate - must pass ALL before proceeding',
+            'principles': [cp['name'] for cp in CORE_PRINCIPLES]
+        },
         'sop': {
             'id': sop.id,
             'name': sop.name,
-            'principles': sop.principles,
+            'secondary_principles': sop.principles,
             'procedures': list(sop.procedures.keys()),
             'checklists': list(sop.checklists.keys())
         },
@@ -664,6 +730,15 @@ async def handle_work_patterns_list(args: dict) -> str:
     sm = get_sop_manager()
     return json.dumps(sm.list_work_patterns(), indent=2)
 
+async def handle_sop_core_principles(args: dict) -> str:
+    """Return the 4 immutable core principles that gate all responses"""
+    return json.dumps({
+        'description': 'These 4 principles form the MANDATORY GATE. Every response must pass ALL of these before any other principles or work patterns apply.',
+        'immutable': True,
+        'evaluation_order': 'All 4 must pass sequentially',
+        'principles': CORE_PRINCIPLES
+    }, indent=2)
+
 
 SOP_HANDLERS = {
     "sop_list": handle_sop_list,
@@ -672,4 +747,5 @@ SOP_HANDLERS = {
     "sop_procedure": handle_sop_procedure,
     "sop_checklist": handle_sop_checklist,
     "work_patterns_list": handle_work_patterns_list,
+    "sop_core_principles": handle_sop_core_principles,
 }
