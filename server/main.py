@@ -43,7 +43,7 @@ from .persistence.learnings import LearningsStore
 from .memory.manager import MemoryManager
 from .memory.janitor import MemoryJanitor
 from .plugins import get_plugin_manager
-from .tools.robust_session import TOOLS as ROBUST_SESSION_TOOLS, HANDLERS as ROBUST_SESSION_HANDLERS
+from .tools.robust_session import TOOLS as ROBUST_SESSION_TOOLS, HANDLERS as ROBUST_SESSION_HANDLERS, get_all_tools
 
 # Configure logging
 logging.basicConfig(
@@ -669,7 +669,7 @@ class CrucibleServer:
                         "required": ["name"]
                     }
                 ),
-            ] + ROBUST_SESSION_TOOLS + self.plugin_manager.get_tools()
+            ] + get_all_tools() + self.plugin_manager.get_tools()
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:

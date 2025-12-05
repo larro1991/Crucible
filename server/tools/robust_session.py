@@ -6,9 +6,13 @@ Provides tools for:
 - Tracking operations with state machine
 - Manual checkpointing
 - Recovery and status queries
+- Standard Operating Procedures (SOP)
 """
 
 from mcp.types import Tool
+
+# Import SOP tools and handlers
+from ..session.sop import get_sop_tools, SOP_HANDLERS
 
 
 # Tool definitions
@@ -1181,4 +1185,11 @@ HANDLERS = {
     "crucible_analytics_project": handle_analytics_project,
     "crucible_analytics_timeline": handle_analytics_timeline,
     "crucible_analytics_tags": handle_analytics_tags,
+    # SOP handlers merged from sop.py
+    **SOP_HANDLERS,
 }
+
+# Get SOP tools dynamically and add to list
+def get_all_tools():
+    """Return all tools including SOP tools"""
+    return TOOLS + get_sop_tools()
