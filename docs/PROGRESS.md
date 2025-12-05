@@ -279,6 +279,114 @@ python -m server.maintenance.system status
 
 ---
 
+## 2024-12-05 - Robust Session Manager & Ember Personality System
+
+### Session Goals
+- Create robust session manager that survives connection drops
+- Add Claude Code web-like UI features (rejoin sessions, rename, GitHub connect)
+- Add voice interface plugin
+- Create personality system for Ember
+- Implement Standard Operating Procedures (SOP)
+
+### Context
+User experiencing frequent connection drops losing session state and active operations. Built comprehensive solution with write-ahead logging, checkpointing, and operation tracking. Extended to full feature set including personalities, voice, and work patterns.
+
+### Completed
+- [x] **Robust Session Manager** (server/session/)
+  - OperationTracker with state machine (queued → in_progress → completed/failed)
+  - Write-Ahead Log (WAL) for atomic operations
+  - CheckpointManager for periodic state snapshots
+  - RobustSessionManager coordinating all components
+  - Heartbeat monitoring for connection drop detection
+- [x] **Session UI Features**
+  - Session naming and renaming
+  - GitHub repository connection
+  - Document attachment system
+  - Tag management for organization
+  - Session search and filtering
+  - Session export/import
+  - Session cloning
+- [x] **Session Templates** (server/session/templates.py)
+  - 7 built-in templates: blank, bugfix, feature, refactor, research, review, ops
+  - Custom template creation
+  - Template creation from existing sessions
+- [x] **Session Analytics**
+  - Summary statistics
+  - Project-level analytics
+  - Activity timeline
+  - Tag usage analysis
+- [x] **Voice Interface Plugin** (server/plugins/voice.py)
+  - STT backends: whisper_api, whisper_local
+  - TTS backends: edge (free), openai, elevenlabs, local (pyttsx3)
+  - Hot-loadable plugin architecture
+- [x] **Personality System** (server/plugins/personality.py)
+  - 8 built-in personalities: default (Ember), friendly (Sunny), technical (Axiom), creative (Muse), mentor (Sage), concise (Spark), pirate (Captain Byte), data (ARIA)
+  - Customizable tone, verbosity, formality, emoji usage
+  - Voice settings per personality
+  - Custom personality creation
+- [x] **Standard Operating Procedures** (server/session/sop.py)
+  - 4 Immutable Core Principles (mandatory gate): Honesty, Kindness, Trust, Transparency
+  - 5 work patterns: default, thorough, fast, careful, learning
+  - 2 built-in SOPs: ember_default, ember_strict
+  - Procedures for: new_task, code_change, debugging, research, recovery
+  - Checklists: before_commit, before_delivery, session_end
+- [x] **MCP Tools Integration**
+  - 50+ new tools added to robust_session.py
+  - Full handler implementations
+  - Integration with main.py
+
+### Files Created
+```
+server/session/
+├── __init__.py          # Module exports
+├── operations.py        # Operation tracking with state machine
+├── wal.py              # Write-Ahead Log
+├── checkpoint.py       # Checkpoint system
+├── manager.py          # RobustSessionManager
+├── templates.py        # Session templates & analytics
+└── sop.py              # Standard Operating Procedures
+
+server/plugins/
+├── voice.py            # Voice interface (STT/TTS)
+├── personality.py      # Personality system
+└── plugins.json        # Plugin configuration
+
+server/tools/
+└── robust_session.py   # MCP tools for session management
+```
+
+### New MCP Tools Added
+| Category | Tools |
+|----------|-------|
+| Session | crucible_robust_start/resume/status/checkpoint/end |
+| Operations | crucible_op_status/list/retry/cancel |
+| Context | crucible_context_set/get |
+| Management | crucible_session_rename/search/delete/clone |
+| GitHub | crucible_github_connect/disconnect/info |
+| Documents | crucible_doc_add/remove/list |
+| Tags | crucible_tags_add/remove |
+| Templates | crucible_template_list/use/create/from_session |
+| Export | crucible_session_export/import |
+| Analytics | crucible_analytics_summary/project/timeline/tags |
+| SOP | sop_list/activate/current/procedure/checklist/core_principles |
+| Patterns | work_patterns_list |
+
+### Core Principles (SOP Gate)
+Every Ember response must pass these 4 immutable principles:
+1. **HONESTY** - Be truthful and accurate. Never deceive or mislead.
+2. **KINDNESS** - Act with compassion and consideration. Avoid harm.
+3. **TRUST** - Be reliable and dependable. Honor commitments.
+4. **TRANSPARENCY** - Be open about capabilities, limitations, and reasoning.
+
+### Next Steps
+- [ ] Test robust session recovery locally
+- [ ] Install edge-tts and test voice plugin
+- [ ] Enable voice/personality plugins
+- [ ] Create EMBER, CINDER, Intuitive OS project repos
+- [ ] Update README with new tools documentation
+
+---
+
 ## Template for Future Entries
 
 ```markdown
