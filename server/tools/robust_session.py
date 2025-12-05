@@ -249,6 +249,199 @@ sessions to resume.""",
             }
         }
     ),
+    # Session Management Tools
+    Tool(
+        name="crucible_session_rename",
+        description="""Rename a session (set a user-friendly display name).
+
+Works on both the current session and past sessions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to rename"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "New display name for the session"
+                }
+            },
+            "required": ["session_id", "name"]
+        }
+    ),
+    Tool(
+        name="crucible_session_search",
+        description="""Search sessions with filters.
+
+Can search by:
+- query: Text search in name, goal, project
+- tags: Filter by session tags
+- project: Filter by project name
+- status: Filter by status (active, completed, etc.)""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Text to search for"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags to filter by"
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project name to filter by"
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Status to filter by"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 20)"
+                }
+            }
+        }
+    ),
+    Tool(
+        name="crucible_session_delete",
+        description="""Delete a session permanently.
+
+Cannot delete the currently active session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session ID to delete"
+                }
+            },
+            "required": ["session_id"]
+        }
+    ),
+    # GitHub Connection Tools
+    Tool(
+        name="crucible_github_connect",
+        description="""Connect the current session to a GitHub repository.
+
+Stores the repository information with the session for context.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "repo_url": {
+                    "type": "string",
+                    "description": "GitHub repository URL (e.g., https://github.com/user/repo)"
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "Branch name (default: main)"
+                }
+            },
+            "required": ["repo_url"]
+        }
+    ),
+    Tool(
+        name="crucible_github_disconnect",
+        description="""Disconnect GitHub from the current session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
+    Tool(
+        name="crucible_github_info",
+        description="""Get GitHub connection info for the current session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
+    # Document Management Tools
+    Tool(
+        name="crucible_doc_add",
+        description="""Add a document to the current session.
+
+Documents can be files, URLs, or text snippets that provide context.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Display name for the document"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "File path or URL"
+                },
+                "doc_type": {
+                    "type": "string",
+                    "enum": ["file", "url", "text"],
+                    "description": "Type of document (default: file)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of what the document contains"
+                }
+            },
+            "required": ["name", "path"]
+        }
+    ),
+    Tool(
+        name="crucible_doc_remove",
+        description="""Remove a document from the current session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "doc_id": {
+                    "type": "string",
+                    "description": "Document ID to remove"
+                }
+            },
+            "required": ["doc_id"]
+        }
+    ),
+    Tool(
+        name="crucible_doc_list",
+        description="""List all documents attached to the current session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
+    # Tag Management Tools
+    Tool(
+        name="crucible_tags_add",
+        description="""Add tags to the current session for organization.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags to add"
+                }
+            },
+            "required": ["tags"]
+        }
+    ),
+    Tool(
+        name="crucible_tags_remove",
+        description="""Remove tags from the current session.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags to remove"
+                }
+            },
+            "required": ["tags"]
+        }
+    ),
 ]
 
 
@@ -417,6 +610,147 @@ async def handle_sessions_list(args: dict) -> str:
     return json.dumps(result, indent=2)
 
 
+# Session Management Handlers
+async def handle_session_rename(args: dict) -> str:
+    """Handle crucible_session_rename tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.rename_session(args['session_id'], args['name'])
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_session_search(args: dict) -> str:
+    """Handle crucible_session_search tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.search_sessions(
+        query=args.get('query'),
+        tags=args.get('tags'),
+        project=args.get('project'),
+        status=args.get('status'),
+        limit=args.get('limit', 20)
+    )
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_session_delete(args: dict) -> str:
+    """Handle crucible_session_delete tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.delete_session(args['session_id'])
+
+    return json.dumps(result, indent=2)
+
+
+# GitHub Connection Handlers
+async def handle_github_connect(args: dict) -> str:
+    """Handle crucible_github_connect tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.connect_github(
+        repo_url=args['repo_url'],
+        branch=args.get('branch', 'main')
+    )
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_github_disconnect(args: dict) -> str:
+    """Handle crucible_github_disconnect tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.disconnect_github()
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_github_info(args: dict) -> str:
+    """Handle crucible_github_info tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.get_github_info()
+
+    if result:
+        return json.dumps(result, indent=2)
+    return json.dumps({'status': 'not_connected'})
+
+
+# Document Management Handlers
+async def handle_doc_add(args: dict) -> str:
+    """Handle crucible_doc_add tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.add_document(
+        name=args['name'],
+        path=args['path'],
+        doc_type=args.get('doc_type', 'file'),
+        description=args.get('description', '')
+    )
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_doc_remove(args: dict) -> str:
+    """Handle crucible_doc_remove tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.remove_document(args['doc_id'])
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_doc_list(args: dict) -> str:
+    """Handle crucible_doc_list tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.list_documents()
+
+    return json.dumps(result, indent=2)
+
+
+# Tag Management Handlers
+async def handle_tags_add(args: dict) -> str:
+    """Handle crucible_tags_add tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.add_tags(args['tags'])
+
+    return json.dumps(result, indent=2)
+
+
+async def handle_tags_remove(args: dict) -> str:
+    """Handle crucible_tags_remove tool"""
+    from ..session import get_robust_session_manager
+    import json
+
+    manager = get_robust_session_manager()
+    result = manager.remove_tags(args['tags'])
+
+    return json.dumps(result, indent=2)
+
+
 # Handler mapping
 HANDLERS = {
     "crucible_robust_start": handle_robust_start,
@@ -431,4 +765,19 @@ HANDLERS = {
     "crucible_context_set": handle_context_set,
     "crucible_context_get": handle_context_get,
     "crucible_sessions_list": handle_sessions_list,
+    # Session management
+    "crucible_session_rename": handle_session_rename,
+    "crucible_session_search": handle_session_search,
+    "crucible_session_delete": handle_session_delete,
+    # GitHub
+    "crucible_github_connect": handle_github_connect,
+    "crucible_github_disconnect": handle_github_disconnect,
+    "crucible_github_info": handle_github_info,
+    # Documents
+    "crucible_doc_add": handle_doc_add,
+    "crucible_doc_remove": handle_doc_remove,
+    "crucible_doc_list": handle_doc_list,
+    # Tags
+    "crucible_tags_add": handle_tags_add,
+    "crucible_tags_remove": handle_tags_remove,
 }

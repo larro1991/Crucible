@@ -27,6 +27,46 @@ from .checkpoint import CheckpointManager, Checkpoint, get_checkpoint_manager
 
 
 @dataclass
+class Document:
+    """A document attached to a session"""
+    doc_id: str
+    name: str
+    path: str                            # Local path or URL
+    doc_type: str                        # file, url, text
+    content_hash: Optional[str] = None   # For detecting changes
+    added_at: str = ""
+    description: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Document':
+        return cls(**data)
+
+
+@dataclass
+class GitHubConnection:
+    """GitHub repository connection for a session"""
+    repo_url: str                        # e.g., https://github.com/user/repo
+    repo_owner: str
+    repo_name: str
+    branch: str = "main"
+    connected_at: str = ""
+    last_sync: Optional[str] = None
+    auth_method: str = "none"            # none, token, ssh
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'GitHubConnection':
+        return cls(**data)
+
+
+@dataclass
 class SessionState:
     """Complete session state for persistence"""
     session_id: str
@@ -37,16 +77,25 @@ class SessionState:
     updated_at: str
     status: str  # active, paused, recovered, completed
     heartbeat_at: str
+    name: str = ""                       # User-friendly display name
     connection_drops: int = 0
     recoveries: int = 0
     context: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    github: Optional[Dict[str, Any]] = None  # GitHubConnection as dict
+    documents: List[Dict[str, Any]] = field(default_factory=list)  # List of Document dicts
+    tags: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SessionState':
+        # Handle missing fields for backwards compatibility
+        data.setdefault('name', '')
+        data.setdefault('github', None)
+        data.setdefault('documents', [])
+        data.setdefault('tags', [])
         return cls(**data)
 
 
@@ -569,17 +618,274 @@ class RobustSessionManager:
                     data = json.load(fp)
                 sessions.append({
                     'session_id': data.get('session_id'),
+                    'name': data.get('name', ''),
                     'project': data.get('project'),
                     'goal': data.get('goal'),
                     'status': data.get('status'),
                     'started_at': data.get('started_at'),
                     'updated_at': data.get('updated_at'),
-                    'recoveries': data.get('recoveries', 0)
+                    'recoveries': data.get('recoveries', 0),
+                    'has_github': data.get('github') is not None,
+                    'document_count': len(data.get('documents', [])),
+                    'tags': data.get('tags', [])
                 })
             except:
                 pass
 
         return sessions
+
+    def rename_session(self, session_id: str, new_name: str) -> Dict[str, Any]:
+        """Rename a session (set display name)"""
+        # If renaming current session
+        if self.session and self.session.session_id == session_id:
+            self.session.name = new_name
+            self.session.updated_at = self._now()
+            self._save_session()
+            return {'status': 'renamed', 'session_id': session_id, 'name': new_name}
+
+        # Renaming a different session
+        file_path = self._get_session_file(session_id)
+        if not file_path.exists():
+            return {'status': 'error', 'error': f'Session {session_id} not found'}
+
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+
+            data['name'] = new_name
+            data['updated_at'] = self._now()
+
+            with open(file_path, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            return {'status': 'renamed', 'session_id': session_id, 'name': new_name}
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
+
+    def connect_github(
+        self,
+        repo_url: str,
+        branch: str = "main",
+        auth_method: str = "none"
+    ) -> Dict[str, Any]:
+        """Connect current session to a GitHub repository"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        # Parse repo URL
+        import re
+        match = re.match(r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$', repo_url)
+        if not match:
+            return {'status': 'error', 'error': 'Invalid GitHub URL format'}
+
+        owner, repo = match.groups()
+
+        connection = GitHubConnection(
+            repo_url=repo_url.rstrip('/').replace('.git', ''),
+            repo_owner=owner,
+            repo_name=repo,
+            branch=branch,
+            connected_at=self._now(),
+            auth_method=auth_method
+        )
+
+        self.session.github = connection.to_dict()
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {
+            'status': 'connected',
+            'repo': f'{owner}/{repo}',
+            'branch': branch,
+            'url': connection.repo_url
+        }
+
+    def disconnect_github(self) -> Dict[str, Any]:
+        """Disconnect GitHub from current session"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        if not self.session.github:
+            return {'status': 'error', 'error': 'No GitHub connection'}
+
+        self.session.github = None
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {'status': 'disconnected'}
+
+    def get_github_info(self) -> Optional[Dict[str, Any]]:
+        """Get GitHub connection info for current session"""
+        if self.session and self.session.github:
+            return self.session.github
+        return None
+
+    def add_document(
+        self,
+        name: str,
+        path: str,
+        doc_type: str = "file",
+        description: str = ""
+    ) -> Dict[str, Any]:
+        """Add a document to the current session"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        import hashlib
+
+        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+
+        # Calculate content hash for files
+        content_hash = None
+        if doc_type == "file" and Path(path).exists():
+            try:
+                with open(path, 'rb') as f:
+                    content_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+            except:
+                pass
+
+        doc = Document(
+            doc_id=doc_id,
+            name=name,
+            path=path,
+            doc_type=doc_type,
+            content_hash=content_hash,
+            added_at=self._now(),
+            description=description
+        )
+
+        self.session.documents.append(doc.to_dict())
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {
+            'status': 'added',
+            'doc_id': doc_id,
+            'name': name,
+            'type': doc_type
+        }
+
+    def remove_document(self, doc_id: str) -> Dict[str, Any]:
+        """Remove a document from the current session"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        original_count = len(self.session.documents)
+        self.session.documents = [
+            d for d in self.session.documents
+            if d.get('doc_id') != doc_id
+        ]
+
+        if len(self.session.documents) == original_count:
+            return {'status': 'error', 'error': f'Document {doc_id} not found'}
+
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {'status': 'removed', 'doc_id': doc_id}
+
+    def list_documents(self) -> List[Dict[str, Any]]:
+        """List documents attached to current session"""
+        if not self.session:
+            return []
+        return self.session.documents
+
+    def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific document by ID"""
+        if not self.session:
+            return None
+
+        for doc in self.session.documents:
+            if doc.get('doc_id') == doc_id:
+                return doc
+        return None
+
+    def add_tags(self, tags: List[str]) -> Dict[str, Any]:
+        """Add tags to current session"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        for tag in tags:
+            if tag not in self.session.tags:
+                self.session.tags.append(tag)
+
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {'status': 'added', 'tags': self.session.tags}
+
+    def remove_tags(self, tags: List[str]) -> Dict[str, Any]:
+        """Remove tags from current session"""
+        if not self.session:
+            return {'status': 'error', 'error': 'No active session'}
+
+        self.session.tags = [t for t in self.session.tags if t not in tags]
+        self.session.updated_at = self._now()
+        self._save_session()
+
+        return {'status': 'removed', 'tags': self.session.tags}
+
+    def search_sessions(
+        self,
+        query: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        project: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Search sessions with filters"""
+        all_sessions = self.list_sessions(limit=100)  # Get more for filtering
+
+        results = []
+        for sess in all_sessions:
+            # Filter by status
+            if status and sess.get('status') != status:
+                continue
+
+            # Filter by project
+            if project and sess.get('project') != project:
+                continue
+
+            # Filter by tags
+            if tags:
+                session_tags = sess.get('tags', [])
+                if not any(t in session_tags for t in tags):
+                    continue
+
+            # Filter by query (search in name, goal, project)
+            if query:
+                query_lower = query.lower()
+                searchable = ' '.join([
+                    sess.get('name', ''),
+                    sess.get('goal', ''),
+                    sess.get('project', ''),
+                    sess.get('session_id', '')
+                ]).lower()
+                if query_lower not in searchable:
+                    continue
+
+            results.append(sess)
+
+            if len(results) >= limit:
+                break
+
+        return results
+
+    def delete_session(self, session_id: str) -> Dict[str, Any]:
+        """Delete a session permanently"""
+        # Prevent deleting active session
+        if self.session and self.session.session_id == session_id:
+            return {'status': 'error', 'error': 'Cannot delete active session'}
+
+        file_path = self._get_session_file(session_id)
+        if not file_path.exists():
+            return {'status': 'error', 'error': f'Session {session_id} not found'}
+
+        try:
+            file_path.unlink()
+            return {'status': 'deleted', 'session_id': session_id}
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
 
     async def cleanup_old_data(
         self,
