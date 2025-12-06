@@ -1,0 +1,99 @@
+# Talos Linux GPU Worker Node Configuration
+# For AI/ML workloads requiring GPU acceleration
+
+version: v1alpha1
+debug: false
+persist: true
+
+machine:
+  type: worker
+  token: ${MACHINE_TOKEN}
+
+  kubelet:
+    image: ghcr.io/siderolabs/kubelet:v1.29.0
+    extraArgs:
+      feature-gates: GracefulNodeShutdown=true
+    extraMounts:
+      - destination: /var/ember
+        type: bind
+        source: /var/ember
+        options:
+          - rbind
+          - rw
+      - destination: /var/crucible
+        type: bind
+        source: /var/crucible
+        options:
+          - rbind
+          - rw
+      - destination: /var/models
+        type: bind
+        source: /var/models
+        options:
+          - rbind
+          - rw
+
+  network:
+    hostname: ${HOSTNAME}
+    interfaces:
+      - interface: eth0
+        dhcp: true
+    nameservers:
+      - 8.8.8.8
+      - 8.8.4.4
+
+  install:
+    disk: /dev/sda
+    image: ghcr.io/siderolabs/installer:v1.6.0
+    bootloader: true
+    wipe: false
+    extensions:
+      # NVIDIA GPU support
+      - image: ghcr.io/siderolabs/nvidia-container-toolkit:v1.14.0
+      - image: ghcr.io/siderolabs/nvidia-fabricmanager:v535.129.03
+
+  kernel:
+    modules:
+      - name: nvidia
+      - name: nvidia_uvm
+      - name: nvidia_drm
+      - name: nvidia_modeset
+
+  sysctls:
+    net.core.somaxconn: "65535"
+    vm.swappiness: "10"
+    # GPU memory management
+    vm.dirty_ratio: "80"
+    vm.dirty_background_ratio: "5"
+
+  files:
+    - content: |
+        HONESTY=true
+        KINDNESS=true
+        TRUST=true
+        TRANSPARENCY=true
+      permissions: 0644
+      path: /etc/ember/principles
+      op: create
+
+    - content: |
+        FORGE_MODE=gpu-worker
+        CINDER_AGENT=true
+        GPU_ENABLED=true
+        LLM_LOCAL=true
+        LOG_LEVEL=info
+      permissions: 0644
+      path: /etc/forge/config
+      op: create
+
+  # GPU-specific node labels
+  nodeLabels:
+    node.kubernetes.io/gpu: "true"
+    nvidia.com/gpu.present: "true"
+
+cluster:
+  id: ${CLUSTER_ID}
+  secret: ${CLUSTER_SECRET}
+
+  controlPlane:
+    endpoint: https://${CONTROL_PLANE_ENDPOINT}:6443

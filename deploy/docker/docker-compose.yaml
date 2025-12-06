@@ -1,0 +1,126 @@
+# Intuitive OS - Full Stack Docker Compose
+# For local development and testing
+
+version: '3.8'
+
+services:
+  # Crucible - Code verification
+  crucible:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.crucible
+    container_name: crucible
+    ports:
+      - "8084:8084"
+    volumes:
+      - crucible-data:/var/crucible/data
+      - ./principles:/etc/ember:ro
+    environment:
+      - CRUCIBLE_MODE=server
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - intuitive-os
+
+  # EMBER - AI orchestration
+  ember:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.ember
+    container_name: ember
+    ports:
+      - "8081:8081"
+    volumes:
+      - ember-data:/var/ember/memory
+      - ./principles:/etc/ember:ro
+    environment:
+      - EMBER_MODE=orchestrator
+      - CRUCIBLE_URL=http://crucible:8084
+      - LOG_LEVEL=info
+    depends_on:
+      crucible:
+        condition: service_healthy
+    networks:
+      - intuitive-os
+
+  # CINDER Controller - Fleet management
+  cinder-controller:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.cinder-controller
+    container_name: cinder-controller
+    ports:
+      - "8082:8082"
+    volumes:
+      - cinder-data:/var/cinder/data
+      - ./principles:/etc/ember:ro
+    environment:
+      - CINDER_MODE=controller
+      - EMBER_URL=http://ember:8081
+      - LOG_LEVEL=info
+    depends_on:
+      ember:
+        condition: service_healthy
+    networks:
+      - intuitive-os
+
+  # CINDER Agent - Example worker node
+  cinder-agent:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.cinder-agent
+    container_name: cinder-agent-1
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./principles:/etc/ember:ro
+    environment:
+      - CINDER_MODE=agent
+      - CONTROLLER_URL=http://cinder-controller:8082
+      - NODE_NAME=agent-1
+    depends_on:
+      cinder-controller:
+        condition: service_healthy
+    networks:
+      - intuitive-os
+
+  # Forge - Main daemon (orchestrates everything)
+  forge:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.forge
+    container_name: forge
+    ports:
+      - "8080:8080"
+    volumes:
+      - forge-data:/var/forge/data
+      - ./principles:/etc/ember:ro
+    environment:
+      - FORGE_MODE=standalone
+      - EMBER_URL=http://ember:8081
+      - CINDER_URL=http://cinder-controller:8082
+      - CRUCIBLE_URL=http://crucible:8084
+      - LOG_LEVEL=info
+    depends_on:
+      ember:
+        condition: service_healthy
+      cinder-controller:
+        condition: service_healthy
+      crucible:
+        condition: service_healthy
+    networks:
+      - intuitive-os
+
+networks:
+  intuitive-os:
+    driver: bridge
+
+volumes:
+  crucible-data:
+  ember-data:
+  cinder-data:
+  forge-data:

@@ -1,0 +1,61 @@
+# EMBER - AI Orchestration System
+# Brain of the Intuitive OS stack
+
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim
+
+LABEL maintainer="Intuitive OS Team"
+LABEL description="EMBER AI Orchestration System"
+LABEL version="0.1.0"
+
+# Core Principles - These are checked before EVERY action
+ENV PRINCIPLE_HONESTY=true \
+    PRINCIPLE_KINDNESS=true \
+    PRINCIPLE_TRUST=true \
+    PRINCIPLE_TRANSPARENCY=true
+
+ENV EMBER_MODE=orchestrator \
+    AGENT_POOL_SIZE=4 \
+    LOG_LEVEL=info \
+    MEMORY_DIR=/var/ember/memory \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache /wheels/*
+
+# Copy EMBER code
+COPY EMBER/ /app/ember/
+
+# Create directories
+RUN mkdir -p /var/ember/memory /var/ember/logs /etc/ember
+
+# Core principles - immutable
+RUN echo "HONESTY=true\nKINDNESS=true\nTRUST=true\nTRANSPARENCY=true" > /etc/ember/principles \
+    && chmod 444 /etc/ember/principles
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+RUN useradd -m -u 1000 ember
+USER ember
+
+EXPOSE 8081
+
+ENTRYPOINT ["python", "-m", "ember"]

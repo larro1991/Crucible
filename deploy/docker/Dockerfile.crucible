@@ -1,0 +1,67 @@
+# Crucible - Code Verification Server
+# MCP server for code testing and verification
+
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim
+
+LABEL maintainer="Intuitive OS Team"
+LABEL description="Crucible Code Verification Server"
+LABEL version="0.1.0"
+
+ENV PRINCIPLE_HONESTY=true \
+    PRINCIPLE_KINDNESS=true \
+    PRINCIPLE_TRUST=true \
+    PRINCIPLE_TRANSPARENCY=true
+
+ENV CRUCIBLE_MODE=server \
+    LOG_LEVEL=info \
+    DATA_DIR=/var/crucible/data \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install verification tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache /wheels/*
+
+# Install verification dependencies
+RUN pip install --no-cache-dir \
+    mypy \
+    flake8 \
+    bandit \
+    black \
+    isort
+
+# Copy Crucible code
+COPY server/ /app/server/
+
+RUN mkdir -p /var/crucible/data /var/crucible/temp /etc/ember
+
+RUN echo "HONESTY=true\nKINDNESS=true\nTRUST=true\nTRANSPARENCY=true" > /etc/ember/principles \
+    && chmod 444 /etc/ember/principles
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8084/health || exit 1
+
+RUN useradd -m -u 1000 crucible
+USER crucible
+
+EXPOSE 8084
+
+ENTRYPOINT ["python", "-m", "server.main"]

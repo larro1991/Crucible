@@ -1,0 +1,71 @@
+# Forge - AI Management Daemon
+# Multi-stage build for minimal image
+
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim
+
+LABEL maintainer="Intuitive OS Team"
+LABEL description="Forge AI Management Daemon"
+LABEL version="0.1.0"
+
+# Core Principles - Immutable
+ENV PRINCIPLE_HONESTY=true \
+    PRINCIPLE_KINDNESS=true \
+    PRINCIPLE_TRUST=true \
+    PRINCIPLE_TRANSPARENCY=true
+
+# Runtime config
+ENV FORGE_MODE=standalone \
+    EMBER_ENABLED=true \
+    CINDER_ENABLED=true \
+    CRUCIBLE_ENABLED=true \
+    LOG_LEVEL=info \
+    DATA_DIR=/var/forge/data \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels and install
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache /wheels/*
+
+# Copy application code
+COPY server/ /app/server/
+COPY Forge/ /app/forge/
+
+# Create directories
+RUN mkdir -p /var/forge/data /var/forge/logs /etc/ember
+
+# Write core principles file
+RUN echo "HONESTY=true\nKINDNESS=true\nTRUST=true\nTRANSPARENCY=true" > /etc/ember/principles \
+    && chmod 444 /etc/ember/principles
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run as non-root
+RUN useradd -m -u 1000 forge
+USER forge
+
+EXPOSE 8080
+
+ENTRYPOINT ["python", "-m", "forge.core.daemon"]
