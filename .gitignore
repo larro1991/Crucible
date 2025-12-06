@@ -45,6 +45,10 @@ data/memory/**/*.json
 !data/.gitkeep
 !data/memory/.gitkeep
 
+# Session data (runtime state)
+data/session/
+data/sop/
+
 # Maintenance directories (keep structure, not content)
 temp/*
 !temp/.gitkeep
