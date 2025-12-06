@@ -1,8 +1,8 @@
 {
   "enabled": {
     "devops": true,
-    "voice": false,
-    "personality": false
+    "voice": true,
+    "personality": true
   },
   "settings": {
     "devops": {
